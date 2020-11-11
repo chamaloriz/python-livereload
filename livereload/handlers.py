@@ -20,6 +20,7 @@ from tornado import escape
 from tornado.log import gen_log
 from tornado.websocket import WebSocketHandler
 from tornado.util import ObjectDict
+from django_sass import compile_sass
 
 logger = logging.getLogger('livereload')
 
@@ -76,16 +77,47 @@ class LiveReloadHandler(WebSocketHandler):
         if filepath == '__livereload__':
             reload_time = 0
 
-        if time.time() - cls._last_reload_time < reload_time:
-            # if you changed lot of files in one time
-            # it will refresh too many times
-            logger.info('Ignore: %s', filepath)
-            return
-        if delay:
-            loop = ioloop.IOLoop.current()
-            loop.call_later(delay, cls.reload_waiters)
-        else:
-            cls.reload_waiters()
+
+        # added sass compiler to the mix
+
+        filepath_expanded = filepath.split("/")
+        filename_expanded = filepath_expanded[-1].split(".")
+
+        if(filename_expanded[-1] == "scss"):
+            
+            logger.info('Detected Sass stated compiling')
+            
+            filepath_expanded[-1] = "main.scss"
+            input_filepath = "/".join(filepath_expanded)
+            filepath_expanded[-1] = "main.css"
+            filepath_expanded[-2] = "css"
+            output_filepath = "/".join(filepath_expanded)
+            
+            try:
+                compile_sass(
+                    inpath=input_filepath,
+                    outpath=output_filepath,
+                    output_style="compact",
+                    precision=8,
+                    source_map=False
+                )
+                logger.info('Compiled Sass')
+            
+            except sass.CompileError as exc:
+                logger.error(str(exc), exc_info=True)
+            
+        #removed time refresh timer
+        
+        #if time.time() - cls._last_reload_time < reload_time:
+        #    # if you changed lot of files in one time
+        #    # it will refresh too many times
+        #    logger.info('Ignore: %s', filepath)
+        #    return
+        #if delay:
+        #    loop = ioloop.IOLoop.current()
+        #    loop.call_later(delay, cls.reload_waiters)
+        #else:
+        cls.reload_waiters()
 
     @classmethod
     def reload_waiters(cls, path=None):
